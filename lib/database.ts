@@ -1,134 +1,135 @@
 import * as SQLite from 'expo-sqlite';
 
-const DB_NAME = 'attendance.db';
-const TABLE_NAME = 'attendance';
-
 export type AttendanceRecord = {
   id: number;
-  studentId: string;
   eventId: string;
   eventTitle: string;
   scannedAt: string;
 };
 
-const db = SQLite.openDatabaseSync(DB_NAME);
+export type Event = {
+  eventId: string;
+  title: string;
+  start: string;
+  end: string;
+};
 
-async function ensureTableSchema(): Promise<void> {
-  const tables = await db.getAllAsync<{ name: string }>(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?;`,
-    [TABLE_NAME]
-  );
+type EventPayload = {
+  v: number;
+  event: string;
+  title?: string;
+  start?: string;
+  end?: string;
+};
 
-  if (tables.length === 0) {
-    await db.runAsync(
-      `CREATE TABLE ${TABLE_NAME} (
+export type RegisterResult = {
+  success: boolean;
+  message: string;
+  eventTitle?: string;
+};
+
+let db: SQLite.SQLiteDatabase | null = null;
+
+async function getDb() {
+  if (!db) {
+    db = await SQLite.openDatabaseAsync('qr-attendance.db');
+    await db.execAsync(`
+      PRAGMA journal_mode = WAL;
+      CREATE TABLE IF NOT EXISTS events (
+        eventId TEXT PRIMARY KEY NOT NULL,
+        title TEXT NOT NULL,
+        start TEXT NOT NULL,
+        end TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS attendance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         studentId TEXT NOT NULL,
         eventId TEXT NOT NULL,
-        eventTitle TEXT NOT NULL,
         scannedAt TEXT NOT NULL,
-        UNIQUE(studentId, eventId)
-      );`,
-      []
-    );
-    return;
+        UNIQUE (studentId, eventId)
+      );
+    `);
   }
-
-  const columns = await db.getAllAsync<{ name: string }>(
-    `PRAGMA table_info(${TABLE_NAME});`,
-    []
-  );
-  const columnNames = columns.map((column) => column.name);
-
-  if (!columnNames.includes('eventId')) {
-    await db.runAsync(
-      `ALTER TABLE ${TABLE_NAME} ADD COLUMN eventId TEXT NOT NULL DEFAULT '';`,
-      []
-    );
-  }
-
-  if (!columnNames.includes('studentId')) {
-    await db.runAsync(
-      `ALTER TABLE ${TABLE_NAME} ADD COLUMN studentId TEXT NOT NULL DEFAULT '';`,
-      []
-    );
-  }
-
-  if (!columnNames.includes('eventTitle')) {
-    await db.runAsync(
-      `ALTER TABLE ${TABLE_NAME} ADD COLUMN eventTitle TEXT NOT NULL DEFAULT '';`,
-      []
-    );
-  }
-
-  if (!columnNames.includes('scannedAt')) {
-    await db.runAsync(
-      `ALTER TABLE ${TABLE_NAME} ADD COLUMN scannedAt TEXT NOT NULL DEFAULT '';`,
-      []
-    );
-  }
-
-  await db.runAsync(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_student_event ON ${TABLE_NAME}(studentId, eventId);`,
-    []
-  );
+  return db;
 }
 
 export async function registerAttendance(
-  rawData: string,
+  rawPayload: string,
   studentId: string
-): Promise<{ success: boolean; message: string }> {
-  await ensureTableSchema();
-
-  let payload: { v?: number; event?: { id?: string; title?: string; end?: string } } = {};
-
+): Promise<RegisterResult> {
+  let payload: EventPayload;
   try {
-    payload = JSON.parse(rawData);
+    payload = JSON.parse(rawPayload);
   } catch {
     return { success: false, message: 'Invalid QR code.' };
   }
 
-  if (payload.v !== 1 || !payload.event?.id || !payload.event?.title) {
-    return { success: false, message: 'Invalid QR code.' };
+  if (payload.v !== 1 || !payload.event) {
+    return { success: false, message: 'Not an attendance QR code.' };
   }
 
-  const now = new Date();
-  const eventEnd = payload.event.end ? new Date(payload.event.end) : null;
+  const now = Date.now();
+  const start = payload.start ? new Date(payload.start).getTime() : null;
+  const end = payload.end ? new Date(payload.end).getTime() : null;
 
-  if (eventEnd && eventEnd.getTime() < now.getTime()) {
+  if (start && now < start) {
+    return { success: false, message: 'Event has not started yet.' };
+  }
+  if (end && now > end) {
     return { success: false, message: 'Event has already ended.' };
   }
 
-  try {
-    await db.runAsync(
-      `INSERT INTO ${TABLE_NAME} (studentId, eventId, eventTitle, scannedAt) VALUES (?, ?, ?, ?);`,
-      [studentId, payload.event.id, payload.event.title, now.toISOString()]
-    );
+  const database = await getDb();
+  const title = payload.title ?? payload.event;
 
-    return { success: true, message: 'Attendance recorded!' };
-  } catch (error: unknown) {
-    const message =
-      typeof error === 'object' && error !== null && 'message' in error
-        ? String((error as { message?: string }).message)
-        : 'Unable to save attendance.';
+  await database.runAsync(
+    'INSERT OR IGNORE INTO events (eventId, title, start, end) VALUES (?, ?, ?, ?)',
+    payload.event,
+    title,
+    payload.start ?? '',
+    payload.end ?? ''
+  );
 
-    if (message.includes('UNIQUE') || message.includes('constraint failed')) {
-      return { success: false, message: 'Event has already been registered.' };
-    }
+  const result = await database.runAsync(
+    'INSERT OR IGNORE INTO attendance (studentId, eventId, scannedAt) VALUES (?, ?, ?)',
+    studentId,
+    payload.event,
+    new Date().toISOString()
+  );
 
-    return { success: false, message: 'Unable to save attendance.' };
+  if (result.changes === 0) {
+    return {
+      success: false,
+      message: 'Already registered for this event.',
+      eventTitle: title,
+    };
   }
+
+  return { success: true, message: 'Attendance recorded!', eventTitle: title };
 }
 
 export async function getAttendanceHistory(
   studentId: string
 ): Promise<AttendanceRecord[]> {
-  await ensureTableSchema();
-
-  const records = await db.getAllAsync<AttendanceRecord>(
-    `SELECT id, studentId, eventId, eventTitle, scannedAt FROM ${TABLE_NAME} WHERE studentId = ? ORDER BY scannedAt DESC;`,
-    [studentId]
+  const database = await getDb();
+  const rows = await database.getAllAsync<AttendanceRecord>(
+    `SELECT a.id, a.eventId, e.title AS eventTitle, a.scannedAt
+     FROM attendance a
+     JOIN events e ON e.eventId = a.eventId
+     WHERE a.studentId = ?
+     ORDER BY a.scannedAt DESC`,
+    studentId
   );
+  return rows;
+}
 
-  return records;
+export async function createEvent(event: Event): Promise<void> {
+  const database = await getDb();
+  await database.runAsync(
+    'INSERT OR REPLACE INTO events (eventId, title, start, end) VALUES (?, ?, ?, ?)',
+    event.eventId,
+    event.title,
+    event.start,
+    event.end
+  );
 }
