@@ -10,7 +10,11 @@ export default function Header({ title }: Props) {
   return (
     <View style={styles.container}>
       <LinearGradient
+<<<<<<< HEAD
         colors={['#A07A50', COLORS.primary]}
+=======
+        colors={['#A0826D', '#8B6F47']}
+>>>>>>> 963e7a25a435e22b8466fff409ec04aa8eda1f84
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.logoCircle}
