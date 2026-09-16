@@ -7,21 +7,30 @@ type Props = {
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
   theme?: 'primary';
+  disabled?: boolean;
   onPress: () => void;
 };
 
-export default function AppButton({ title, icon, theme, onPress }: Props) {
-  if (theme === 'primary') {
+export default function AppButton({
+  title,
+  icon,
+  theme,
+  disabled = false,
+  onPress,
+}: Props) {
+  const isPrimary = theme === 'primary';
+
+  if (isPrimary) {
     return (
-      <View
-        style={[
-          styles.buttonOuter,
-          { borderWidth: 3, borderColor: COLORS.primary, borderRadius: 18 },
-        ]}
-      >
+      <View style={styles.buttonOuter}>
         <Pressable
-          style={[styles.buttonInner, { backgroundColor: COLORS.primary }]}
-          onPress={onPress}
+          style={[
+            styles.buttonInner,
+            styles.primaryButton,
+            { opacity: disabled ? 0.5 : 1 },
+          ]}
+          onPress={disabled ? undefined : onPress}
+          disabled={disabled}
         >
           <Ionicons
             name={icon}
@@ -29,9 +38,7 @@ export default function AppButton({ title, icon, theme, onPress }: Props) {
             color={COLORS.textOnPrimary}
             style={styles.icon}
           />
-          <Text style={[styles.label, { color: COLORS.textOnPrimary }]}>
-            {title}
-          </Text>
+          <Text style={[styles.label, styles.primaryLabel]}>{title}</Text>
         </Pressable>
       </View>
     );
@@ -39,11 +46,15 @@ export default function AppButton({ title, icon, theme, onPress }: Props) {
 
   return (
     <View style={styles.buttonOuter}>
-      <Pressable style={styles.buttonInner} onPress={onPress}>
+      <Pressable
+        style={[styles.buttonInner, styles.secondaryButton, { opacity: disabled ? 0.5 : 1 }]}
+        onPress={disabled ? undefined : onPress}
+        disabled={disabled}
+      >
         <Ionicons
           name={icon}
           size={22}
-          color={COLORS.textSecondary}
+          color={COLORS.textPrimary}
           style={styles.icon}
         />
         <Text style={styles.label}>{title}</Text>
@@ -58,19 +69,24 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   buttonInner: {
-    borderRadius: 14,
+    borderRadius: 10,
     paddingVertical: 16,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  secondaryButton: {
     backgroundColor: COLORS.card,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   icon: { paddingRight: 10 },
   label: { fontSize: 17, fontWeight: '600', color: COLORS.textPrimary },
+  primaryLabel: { color: COLORS.textOnPrimary, fontWeight: '700' },
 });

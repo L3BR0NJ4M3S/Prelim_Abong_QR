@@ -19,12 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-<<<<<<< HEAD
       "predictiveBackGestureEnabled": false,
       "package": "com.lebronjamesabong.QRATT"
-=======
-      "predictiveBackGestureEnabled": false
->>>>>>> 963e7a25a435e22b8466fff409ec04aa8eda1f84
     },
     "web": {
       "output": "static",
@@ -42,7 +38,6 @@
         }
       ],
       "expo-sqlite",
-<<<<<<< HEAD
       "@react-native-community/datetimepicker",
       "expo-secure-store"
     ],
@@ -56,12 +51,5 @@
       }
     },
     "owner": "lebronjamesabong"
-=======
-      "@react-native-community/datetimepicker"
-    ],
-    "experiments": {
-      "reactCompiler": true
-    }
->>>>>>> 963e7a25a435e22b8466fff409ec04aa8eda1f84
   }
 }
