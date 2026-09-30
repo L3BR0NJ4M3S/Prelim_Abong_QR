@@ -17,7 +17,28 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     .maybeSingle();
 
   if (error || !data) {
-    return null;
+    const { data: authUser, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !authUser.user || authUser.user.id !== userId) {
+      return null;
+    }
+
+    const fallbackProfile: Profile = {
+      id: authUser.user.id,
+      email: authUser.user.email ?? '',
+      full_name: authUser.user.user_metadata?.full_name ?? null,
+      role: 'student',
+    };
+
+    const { error: insertError } = await supabase
+      .from('profiles')
+      .upsert(fallbackProfile, { onConflict: 'id' });
+
+    if (insertError) {
+      return null;
+    }
+
+    return fallbackProfile;
   }
 
   return data as Profile;

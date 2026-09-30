@@ -14,8 +14,10 @@ export default function RootLayout() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={styles.background}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
       </View>
     );
   }
@@ -25,20 +27,25 @@ export default function RootLayout() {
   const inTabsGroup = path === '(tabs)';
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {!session && inTabsGroup && <Redirect href="/login" />}
-      {session && inAuthGroup && <Redirect href="/(tabs)" />}
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <View style={styles.background}>
+      <Stack screenOptions={{ headerShown: false }}>
+        {!session && inTabsGroup && <Redirect href="/login" />}
+        {session && inAuthGroup && <Redirect href="/(tabs)" />}
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },

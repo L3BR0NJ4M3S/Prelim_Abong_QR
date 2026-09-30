@@ -15,7 +15,7 @@ type AuthState = {
 
 let globalSession: Session | null = null;
 let globalUser: User | null = null;
-let globalLoading = false;
+let globalLoading = true;
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -29,6 +29,19 @@ export function setAuth(session: Session | null) {
   notify();
 }
 
+async function hydrateAuth() {
+  globalLoading = true;
+  notify();
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    setAuth(error ? null : data.session);
+  } catch (error) {
+    console.error('Failed to restore the auth session:', error);
+    setAuth(null);
+  }
+}
+
 export function useAuth(): AuthState {
   const [, forceRender] = useState(0);
 
@@ -36,8 +49,15 @@ export function useAuth(): AuthState {
     const listener = () => forceRender((n) => n + 1);
     listeners.add(listener);
 
+    void hydrateAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuth(session);
+    });
+
     return () => {
       listeners.delete(listener);
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -48,21 +68,64 @@ export function useAuth(): AuthState {
   };
 }
 
+async function upsertProfileForUser(
+  userId: string,
+  email: string,
+  profile?: SignUpProfile
+) {
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        email: email.trim(),
+        full_name: profile?.full_name ?? '',
+        role: profile?.role ?? 'student',
+      },
+      { onConflict: 'id' }
+    );
+
+  return { error };
+}
+
+async function ensureProfileExists(userId: string, email: string) {
+  const { data: existingProfile, error: lookupError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (lookupError) {
+    return { error: lookupError };
+  }
+
+  if (existingProfile) {
+    return { error: null };
+  }
+
+  const { error } = await supabase.from('profiles').insert({
+    id: userId,
+    email: email.trim(),
+    full_name: '',
+    role: 'student',
+  });
+
+  return { error };
+}
+
 export async function signUp(email: string, password: string, profile?: SignUpProfile) {
   const { data, error } = await supabase.auth.signUp({ email, password });
 
-  if (!error && data.session && profile) {
-    await supabase
-      .from('profiles')
-      .update({
-        full_name: profile.full_name,
-        role: profile.role,
-      })
-      .eq('id', data.session.user.id);
-  }
+  if (!error) {
+    const user = data.user ?? data.session?.user;
 
-  if (!error && data.session) {
-    setAuth(data.session);
+    if (user && profile) {
+      await upsertProfileForUser(user.id, user.email ?? email, profile);
+    }
+
+    if (data.session) {
+      setAuth(data.session);
+    }
   }
 
   return { data, error };
@@ -73,6 +136,15 @@ export async function signIn(email: string, password: string) {
 
   if (!error && data.session) {
     setAuth(data.session);
+    void ensureProfileExists(data.session.user.id, data.session.user.email ?? email)
+      .then(({ error: profileError }) => {
+        if (profileError) {
+          console.error('Failed to ensure the user profile:', profileError);
+        }
+      })
+      .catch((profileError: unknown) => {
+        console.error('Failed to ensure the user profile:', profileError);
+      });
   }
 
   return { data, error };
