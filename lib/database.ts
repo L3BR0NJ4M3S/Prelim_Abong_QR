@@ -1,3 +1,4 @@
+/*
 import { parseQRPayload } from './qr';
 import { supabase } from './supabase';
 
@@ -121,4 +122,5 @@ export async function getAttendanceHistory(
     };
   });
 }
+*/
 

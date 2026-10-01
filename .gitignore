@@ -20,7 +20,11 @@ expo-env.d.ts
 .DS_Store
 
 # local env files
+.env
 .env*.local
+
+# nested project copy
+/Prelim_Abong_QR-main/
 
 # teaching materials
 docs/
