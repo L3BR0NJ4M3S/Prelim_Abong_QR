@@ -150,14 +150,14 @@ const styles = StyleSheet.create({
   },
   roleBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#E3F2FD',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: 12,
   },
   roleBadgeStudent: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: 'rgba(135, 147, 106, 0.16)',
   },
   roleBadgeText: {
     color: COLORS.primary,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     flex: 1,
-    backgroundColor: '#F6F7F9',
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   saveButtonText: {
-    color: '#fff',
+    color: COLORS.textOnPrimary,
     fontWeight: '700',
   },
 });

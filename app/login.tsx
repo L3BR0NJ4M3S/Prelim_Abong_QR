@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +26,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -80,15 +83,30 @@ export default function LoginScreen() {
               />
 
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={COLORS.textSecondary}
-                secureTextEntry
-                editable={!loading}
-              />
+              <View style={styles.passwordField}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  placeholderTextColor={COLORS.textSecondary}
+                  secureTextEntry={!showPassword}
+                  editable={!loading}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  accessibilityState={{ selected: showPassword }}
+                  onPress={() => setShowPassword((visible) => !visible)}
+                  style={styles.passwordToggle}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={21}
+                    color={COLORS.textSecondary}
+                  />
+                </Pressable>
+              </View>
 
               {error && <Text style={styles.error}>{error}</Text>}
 
@@ -165,6 +183,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: COLORS.textPrimary,
+  },
+  passwordField: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 52,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 8,
+    minWidth: 40,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   error: {
     fontSize: 14,

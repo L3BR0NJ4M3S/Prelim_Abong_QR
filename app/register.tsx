@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Keyboard,
@@ -26,6 +27,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -158,26 +161,58 @@ export default function RegisterScreen() {
                 />
 
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="At least 6 characters"
-                  placeholderTextColor={COLORS.textSecondary}
-                  secureTextEntry
-                  editable={!loading}
-                />
+                <View style={styles.passwordField}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="At least 6 characters"
+                    placeholderTextColor={COLORS.textSecondary}
+                    secureTextEntry={!showPassword}
+                    editable={!loading}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    accessibilityState={{ selected: showPassword }}
+                    onPress={() => setShowPassword((visible) => !visible)}
+                    style={styles.passwordToggle}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={21}
+                      color={COLORS.textSecondary}
+                    />
+                  </Pressable>
+                </View>
 
                 <Text style={styles.label}>Confirm Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Re-enter your password"
-                  placeholderTextColor={COLORS.textSecondary}
-                  secureTextEntry
-                  editable={!loading}
-                />
+                <View style={styles.passwordField}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Re-enter your password"
+                    placeholderTextColor={COLORS.textSecondary}
+                    secureTextEntry={!showConfirmPassword}
+                    editable={!loading}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showConfirmPassword ? 'Hide password' : 'Show password'
+                    }
+                    accessibilityState={{ selected: showConfirmPassword }}
+                    onPress={() => setShowConfirmPassword((visible) => !visible)}
+                    style={styles.passwordToggle}
+                  >
+                    <Ionicons
+                      name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={21}
+                      color={COLORS.textSecondary}
+                    />
+                  </Pressable>
+                </View>
 
                 {error && <Text style={styles.error}>{error}</Text>}
 
@@ -258,6 +293,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textPrimary,
   },
+  passwordField: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 52,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 8,
+    minWidth: 40,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   roleRow: {
     flexDirection: 'row',
     gap: 12,
@@ -275,7 +325,7 @@ const styles = StyleSheet.create({
   },
   roleChipActive: {
     borderColor: COLORS.primary,
-    backgroundColor: '#EAF5EF',
+    backgroundColor: COLORS.surface,
   },
   roleChipText: {
     color: COLORS.textSecondary,

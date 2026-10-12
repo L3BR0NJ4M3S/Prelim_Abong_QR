@@ -1,4 +1,3 @@
-import { getEventByCode } from './events';
 import { parseQRPayload } from './qr';
 import { supabase } from './supabase';
 
@@ -36,8 +35,7 @@ export type TeacherEventAttendance = {
 };
 
 export async function registerAttendance(
-  rawPayload: string,
-  studentId: string
+  rawPayload: string
 ): Promise<RegisterResult> {
   const parsed = parseQRPayload(rawPayload);
 
@@ -45,69 +43,31 @@ export async function registerAttendance(
     return { success: false, message: parsed.message };
   }
 
-  const payload = parsed.payload;
-  const now = Date.now();
-  const start = payload.start ? new Date(payload.start).getTime() : null;
-  const end = payload.end ? new Date(payload.end).getTime() : null;
+  const { data, error } = await supabase.rpc('check_in_with_event_qr', {
+    p_event_id: parsed.payload.eventId,
+    p_token: parsed.payload.token,
+  });
 
-  if (start && now < start) {
-    return { success: false, message: 'Event has not started yet.' };
+  if (error) {
+    console.error('Attendance verification failed:', error);
+    return {
+      success: false,
+      message: 'Could not verify this QR code. Please try again.',
+    };
   }
 
-  if (end && now > end) {
-    return { success: false, message: 'Event has already ended.' };
-  }
-
-  const title = payload.title ?? payload.event;
-  let event: { id: string; title: string } | null = null;
-
-  const foundEvent = await getEventByCode(payload.event);
-  if (foundEvent) {
-    event = { id: foundEvent.id, title: foundEvent.title };
-  } else {
-    const { data: newEvent, error: insertError } = await supabase
-      .from('events')
-      .insert([
-        {
-          event_code: payload.event,
-          title,
-          start_time: payload.start ?? null,
-          end_time: payload.end ?? null,
-        },
-      ])
-      .select('id, title')
-      .single();
-
-    if (insertError) {
-      return { success: false, message: 'Could not create event.' };
-    }
-
-    event = newEvent;
-  }
-
-  const { error: attError } = await supabase.from('attendance').insert([
-    {
-      student_id: studentId,
-      event_id: event.id,
-    },
-  ]);
-
-  if (attError) {
-    if (attError.code === '23505') {
-      return {
-        success: false,
-        message: 'Already registered for this event.',
-        eventTitle: event.title,
-      };
-    }
-
-    return { success: false, message: attError.message };
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result || typeof result.success !== 'boolean') {
+    return {
+      success: false,
+      message: 'The attendance verification service returned an invalid response.',
+    };
   }
 
   return {
-    success: true,
-    message: 'Attendance recorded!',
-    eventTitle: event.title,
+    success: result.success,
+    message: result.message,
+    eventTitle: result.event_title ?? undefined,
   };
 }
 
@@ -136,6 +96,26 @@ export async function getAttendanceHistory(
   });
 }
 
+export async function deleteAttendanceRecord(
+  studentId: string,
+  attendanceId: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('attendance')
+    .delete()
+    .eq('id', attendanceId)
+    .eq('student_id', studentId)
+    .select('id');
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.length) {
+    throw new Error('The attendance record could not be deleted.');
+  }
+}
+
 export async function getTeacherEventSummary(
   teacherId: string
 ): Promise<TeacherEventSummary[]> {
@@ -145,7 +125,9 @@ export async function getTeacherEventSummary(
     .eq('created_by', teacherId)
     .order('created_at', { ascending: false });
 
-  if (eventError || !events) return [];
+  if (eventError || !events) {
+    return [];
+  }
 
   const eventIds = events.map((event: any) => event.id);
   if (eventIds.length === 0) return [];
@@ -178,7 +160,8 @@ export async function getTeacherEventSummary(
 }
 
 export async function getTeacherEventAttendance(
-  teacherId: string
+  teacherId: string,
+  options: { throwOnError?: boolean } = {}
 ): Promise<TeacherEventAttendance[]> {
   const { data: events, error: eventError } = await supabase
     .from('events')
@@ -186,7 +169,12 @@ export async function getTeacherEventAttendance(
     .eq('created_by', teacherId)
     .order('created_at', { ascending: false });
 
-  if (eventError || !events) return [];
+  if (eventError || !events) {
+    if (options.throwOnError) {
+      throw eventError ?? new Error('Could not load teacher events.');
+    }
+    return [];
+  }
 
   const eventIds = events.map((event: any) => event.id);
   if (eventIds.length === 0) return [];
@@ -198,6 +186,9 @@ export async function getTeacherEventAttendance(
     .order('scanned_at', { ascending: false });
 
   if (attError || !attendance) {
+    if (options.throwOnError) {
+      throw attError ?? new Error('Could not load attendance check-ins.');
+    }
     return events.map((event: any) => ({
       eventId: event.id,
       eventCode: event.event_code,

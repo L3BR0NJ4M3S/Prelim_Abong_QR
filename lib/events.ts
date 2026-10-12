@@ -5,6 +5,8 @@ export type Event = {
   title: string;
   start: string;
   end: string;
+  description: string;
+  location: string;
 };
 
 export type CloudEvent = {
@@ -17,25 +19,37 @@ export type CloudEvent = {
   created_at: string;
 };
 
+export type CreatedEvent = {
+  id: string;
+  event_code: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  start_time: string;
+  end_time: string;
+  qr_token: string;
+};
+
 export async function createEvent(
   event: Event
-): Promise<{ error: string | null }> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+): Promise<CreatedEvent> {
+  const { data, error } = await supabase.rpc('create_teacher_event', {
+    p_event_code: event.eventId,
+    p_title: event.title,
+    p_description: event.description || null,
+    p_location: event.location || null,
+    p_start_time: event.start,
+    p_end_time: event.end,
+  });
 
-  const { error } = await supabase.from('events').upsert(
-    {
-      event_code: event.eventId,
-      title: event.title,
-      start_time: event.start || null,
-      end_time: event.end || null,
-      created_by: user?.id ?? null,
-    },
-    { onConflict: 'event_code' }
-  );
+  if (error) throw error;
 
-  return { error: error?.message ?? null };
+  const created = Array.isArray(data) ? data[0] : data;
+  if (!created) {
+    throw new Error('The event was not returned after it was created.');
+  }
+
+  return created as CreatedEvent;
 }
 
 export async function getEventsByTeacher(

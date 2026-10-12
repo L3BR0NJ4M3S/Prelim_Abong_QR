@@ -24,10 +24,10 @@ export default function AppButton({
     return (
       <View style={styles.buttonOuter}>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.buttonInner,
             styles.primaryButton,
-            { opacity: disabled ? 0.5 : 1 },
+            { opacity: disabled ? 0.5 : pressed ? 0.86 : 1 },
           ]}
           onPress={disabled ? undefined : onPress}
           disabled={disabled}
@@ -47,7 +47,11 @@ export default function AppButton({
   return (
     <View style={styles.buttonOuter}>
       <Pressable
-        style={[styles.buttonInner, styles.secondaryButton, { opacity: disabled ? 0.5 : 1 }]}
+        style={({ pressed }) => [
+          styles.buttonInner,
+          styles.secondaryButton,
+          { opacity: disabled ? 0.5 : pressed ? 0.78 : 1 },
+        ]}
         onPress={disabled ? undefined : onPress}
         disabled={disabled}
       >
@@ -69,7 +73,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   buttonInner: {
-    borderRadius: 10,
+    borderRadius: 9,
     paddingVertical: 16,
     paddingHorizontal: 20,
     alignItems: 'center',
@@ -79,7 +83,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: COLORS.primary,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: '#D8BC7C',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.24,
+    shadowRadius: 6,
+    elevation: 3,
   },
   secondaryButton: {
     backgroundColor: COLORS.card,
@@ -87,6 +96,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   icon: { paddingRight: 10 },
-  label: { fontSize: 17, fontWeight: '600', color: COLORS.textPrimary },
+  label: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
   primaryLabel: { color: COLORS.textOnPrimary, fontWeight: '700' },
 });

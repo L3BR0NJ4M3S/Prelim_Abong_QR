@@ -1,9 +1,7 @@
 export type QRPayload = {
-  v: 1;
-  event: string;
-  title?: string;
-  start?: string;
-  end?: string;
+  v: 2;
+  eventId: string;
+  token: string;
 };
 
 export type ParseQRResult =
@@ -12,24 +10,17 @@ export type ParseQRResult =
 
 export function buildQRPayload(event: {
   eventId: string;
-  title: string;
-  start?: string;
-  end?: string;
+  token: string;
 }): string {
-  const payload: QRPayload = {
-    v: 1,
-    event: event.eventId,
-  };
-
-  if (event.title) payload.title = event.title;
-  if (event.start) payload.start = event.start;
-  if (event.end) payload.end = event.end;
-
-  return JSON.stringify(payload);
+  return JSON.stringify({
+    v: 2,
+    eventId: event.eventId,
+    token: event.token,
+  });
 }
 
 export function parseQRPayload(raw: string): ParseQRResult {
-  let parsed: any;
+  let parsed: unknown;
 
   try {
     parsed = JSON.parse(raw);
@@ -37,9 +28,30 @@ export function parseQRPayload(raw: string): ParseQRResult {
     return { ok: false, message: 'Invalid QR code.' };
   }
 
-  if (parsed.v !== 1 || typeof parsed.event !== 'string' || !parsed.event) {
+  if (typeof parsed !== 'object' || parsed === null) {
     return { ok: false, message: 'Not an attendance QR code.' };
   }
 
-  return { ok: true, payload: parsed as QRPayload };
+  const value = parsed as Record<string, unknown>;
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (
+    value.v !== 2 ||
+    typeof value.eventId !== 'string' ||
+    !uuidPattern.test(value.eventId) ||
+    typeof value.token !== 'string' ||
+    !uuidPattern.test(value.token)
+  ) {
+    return { ok: false, message: 'Not a valid secure attendance QR code.' };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      v: 2,
+      eventId: value.eventId,
+      token: value.token,
+    },
+  };
 }

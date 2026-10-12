@@ -16,7 +16,9 @@ export default function ScanScreen() {
   const [success, setSuccess] = useState(false);
 
   if (!permission) {
-    return <View style={styles.container} />;
+    return (
+      <View style={styles.container} />
+    );
   }
 
   if (!permission.granted) {
@@ -36,14 +38,24 @@ export default function ScanScreen() {
     );
   }
 
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
     setScanned(true);
     setLastData(data);
-    const studentId = user?.id ?? 'unknown';
-    registerAttendance(data, studentId).then((result) => {
+    if (!user) {
+      setMessage('Please sign in before recording attendance.');
+      setSuccess(false);
+      return;
+    }
+
+    try {
+      const result = await registerAttendance(data);
       setMessage(result.message);
       setSuccess(result.success);
-    });
+    } catch (error) {
+      console.error('Failed to record attendance:', error);
+      setMessage('Could not record attendance. Please try again.');
+      setSuccess(false);
+    }
   };
 
   const handleScanAgain = () => {
@@ -138,10 +150,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   success: {
-    color: '#2E7D32',
+    color: COLORS.success,
   },
   error: {
-    color: '#C62828',
+    color: COLORS.danger,
   },
   scanData: {
     fontSize: 12,

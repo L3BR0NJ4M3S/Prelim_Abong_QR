@@ -10,7 +10,7 @@ export default function Header({ title }: Props) {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[COLORS.primary, '#3B8E6A']}
+        colors={['#D8BC7C', '#A77C45']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.logoCircle}
@@ -39,5 +39,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    fontFamily: 'Georgia',
   },
 });

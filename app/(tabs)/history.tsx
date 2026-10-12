@@ -1,62 +1,96 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
+import Ionicons from '@expo/vector-icons/Ionicons';
+import SwipeArchiveRow from '@/components/SwipeArchiveRow';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
+import {
+  archiveAttendance,
+  getArchivedAttendanceIds,
+  restoreAttendance,
+} from '@/lib/attendanceArchive';
 import {
   getAttendanceHistory,
   getTeacherEventAttendance,
   getTeacherEventSummary,
   type AttendanceRecord,
   type TeacherEventAttendance,
+  deleteAttendanceRecord,
 } from '@/lib/attendance';
-import { getProfile } from '@/lib/profiles';
+import { getProfile, type Role } from '@/lib/profiles';
 
 export default function HistoryScreen() {
   const { user } = useAuth();
-  const [role, setRole] = useState<'student' | 'teacher' | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [archivedIds, setArchivedIds] = useState<string[]>([]);
+  const [showArchive, setShowArchive] = useState(false);
   const [teacherEvents, setTeacherEvents] = useState<TeacherEventAttendance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<AttendanceRecord | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadHistory = useCallback(async () => {
+    setLoading(true);
     if (!user) {
       setRecords([]);
+      setArchivedIds([]);
       setTeacherEvents([]);
       setLoading(false);
       return;
     }
 
-    const profile = await getProfile(user.id);
-    const currentRole = profile?.role ?? 'student';
-    setRole(currentRole);
+    try {
+      const profile = await getProfile(user.id);
+      const currentRole = profile?.role ?? 'student';
+      setRole(currentRole);
 
-    if (currentRole === 'teacher') {
-      const [events, summaries] = await Promise.all([
-        getTeacherEventAttendance(user.id),
-        getTeacherEventSummary(user.id),
+      if (currentRole === 'teacher') {
+        const [events, summaries] = await Promise.all([
+          getTeacherEventAttendance(user.id),
+          getTeacherEventSummary(user.id),
+        ]);
+
+        const summaryMap = new Map(
+          summaries.map((summary) => [summary.eventId, summary.attendeeCount])
+        );
+
+        setTeacherEvents(
+          events.map((event) => ({
+            ...event,
+            attendeeCount: summaryMap.get(event.eventId) ?? event.attendeeCount,
+          }))
+        );
+        setRecords([]);
+        setLoading(false);
+        return;
+      }
+
+      const [rows, archived] = await Promise.all([
+        getAttendanceHistory(user.id),
+        getArchivedAttendanceIds(user.id),
       ]);
-
-      const summaryMap = new Map(
-        summaries.map((summary) => [summary.eventId, summary.attendeeCount])
-      );
-
-      setTeacherEvents(
-        events.map((event) => ({
-          ...event,
-          attendeeCount: summaryMap.get(event.eventId) ?? event.attendeeCount,
-        }))
-      );
-      setRecords([]);
+      setRecords(rows);
+      setArchivedIds(archived);
+      setTeacherEvents([]);
+      setArchiveError(null);
+    } catch (error) {
+      console.error('Failed to load attendance history:', error);
+      setArchiveError('Could not load attendance history. Please try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const rows = await getAttendanceHistory(user.id);
-    setRecords(rows);
-    setTeacherEvents([]);
-    setLoading(false);
   }, [user]);
 
   useFocusEffect(
@@ -125,25 +159,155 @@ export default function HistoryScreen() {
     );
   }
 
+  const visibleRecords = records.filter((record) =>
+    archivedIds.includes(record.id) === showArchive
+  );
+
+  const handleArchiveChange = async (recordId: string, archive: boolean) => {
+    if (!user) {
+      return;
+    }
+
+    setArchiveError(null);
+    try {
+      if (archive) {
+        await archiveAttendance(user.id, recordId);
+        setArchivedIds((current) =>
+          current.includes(recordId) ? current : [...current, recordId]
+        );
+      } else {
+        await restoreAttendance(user.id, recordId);
+        setArchivedIds((current) => current.filter((id) => id !== recordId));
+      }
+    } catch (error) {
+      console.error('Failed to update the attendance archive:', error);
+      setArchiveError('Could not update this record. Please try again.');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!user || !recordToDelete || deleting) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAttendanceRecord(user.id, recordToDelete.id);
+      await restoreAttendance(user.id, recordToDelete.id);
+      setRecords((current) => current.filter((record) => record.id !== recordToDelete.id));
+      setArchivedIds((current) => current.filter((id) => id !== recordToDelete.id));
+      setRecordToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete attendance record:', error);
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete this record. Please try again.'
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Attendance History</Text>
+      <View style={styles.historyHeader}>
+        <Text style={styles.title}>
+          {showArchive ? 'Archived Attendance' : 'Attendance History'}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={showArchive ? 'Return to attendance history' : 'View archived attendance'}
+          onPress={() => {
+            setShowArchive((current) => !current);
+            setArchiveError(null);
+          }}
+          style={({ pressed }) => [styles.archiveButton, pressed && styles.archiveButtonPressed]}
+        >
+          <Ionicons
+            name={showArchive ? 'arrow-back-outline' : 'archive-outline'}
+            size={17}
+            color={COLORS.primary}
+          />
+          <Text style={styles.archiveButtonText}>
+            {showArchive ? 'History' : `Archive${archivedIds.length ? ` (${archivedIds.length})` : ''}`}
+          </Text>
+        </Pressable>
+      </View>
 
-      {records.length === 0 ? (
+      {archiveError && <Text style={styles.error}>{archiveError}</Text>}
+
+      <Modal
+        visible={recordToDelete !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!deleting) {
+            setRecordToDelete(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmationCard}>
+            <Text style={styles.confirmationTitle}>Delete attendance record?</Text>
+            <Text style={styles.confirmationText}>
+              This permanently removes your attendance record from history and event reports.
+              This action cannot be undone.
+            </Text>
+            {deleteError && <Text style={styles.error}>{deleteError}</Text>}
+            <View style={styles.confirmationActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={deleting}
+                onPress={() => {
+                  setRecordToDelete(null);
+                  setDeleteError(null);
+                }}
+                style={[styles.confirmationButton, styles.cancelButton]}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={deleting}
+                onPress={() => void handleDelete()}
+                style={[styles.confirmationButton, styles.deleteButton]}
+              >
+                <Text style={styles.deleteButtonText}>
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {visibleRecords.length === 0 ? (
         <Text style={styles.subtitle}>
-          No records yet. Scan a QR code to register your attendance.
+          {showArchive
+            ? 'No archived attendance yet. Swipe a record left and tap Archive to move it here.'
+            : 'No records yet. Scan a QR code to register your attendance.'}
         </Text>
       ) : (
         <FlatList
-          data={records}
+          data={visibleRecords}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.eventTitle}>{item.eventTitle}</Text>
-              <Text style={styles.eventMeta}>{item.eventId}</Text>
-              <Text style={styles.eventMeta}>{formatDate(item.scannedAt)}</Text>
-            </View>
+            <SwipeArchiveRow
+              actionLabel={showArchive ? 'Restore' : 'Archive'}
+              onAction={() => void handleArchiveChange(item.id, !showArchive)}
+              onDelete={() => {
+                setDeleteError(null);
+                setRecordToDelete(item);
+              }}
+            >
+              <View style={styles.card}>
+                <Text style={styles.eventTitle}>{item.eventTitle}</Text>
+                <Text style={styles.eventMeta}>{item.eventId}</Text>
+                <Text style={styles.eventMeta}>{formatDate(item.scannedAt)}</Text>
+              </View>
+            </SwipeArchiveRow>
           )}
         />
       )}
@@ -171,6 +335,98 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textPrimary,
     marginBottom: 16,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+  },
+  confirmationCard: {
+    width: '100%',
+    maxWidth: 420,
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  confirmationTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  confirmationText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  confirmationActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 20,
+  },
+  confirmationButton: {
+    minHeight: 42,
+    minWidth: 92,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+  },
+  cancelButton: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  deleteButton: {
+    backgroundColor: COLORS.danger,
+  },
+  cancelButtonText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteButtonText: {
+    color: COLORS.textOnPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  archiveButton: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    marginTop: -8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.card,
+  },
+  archiveButtonPressed: {
+    backgroundColor: COLORS.surface,
+  },
+  archiveButtonText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  error: {
+    color: COLORS.danger,
+    fontSize: 13,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 14,
@@ -212,7 +468,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   countBadge: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: 'rgba(135, 147, 106, 0.16)',
     borderRadius: 999,
     minWidth: 30,
     height: 30,
@@ -221,7 +477,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   countBadgeText: {
-    color: '#2E7D32',
+    color: COLORS.success,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -234,7 +490,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#EAEAEA',
+    borderTopColor: COLORS.border,
     paddingTop: 8,
   },
   attendeeId: {
