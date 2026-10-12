@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -13,59 +13,77 @@ type AuthState = {
   loading: boolean;
 };
 
-let globalSession: Session | null = null;
-let globalUser: User | null = null;
-let globalLoading = true;
+let authState: AuthState = {
+  session: null,
+  user: null,
+  loading: true,
+};
 const listeners = new Set<() => void>();
+let hydrationPromise: Promise<void> | null = null;
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
 
 function notify() {
   listeners.forEach((listener) => listener());
 }
 
 export function setAuth(session: Session | null) {
-  globalSession = session;
-  globalUser = session?.user ?? null;
-  globalLoading = false;
+  authState = {
+    session,
+    user: session?.user ?? null,
+    loading: false,
+  };
   notify();
 }
 
-async function hydrateAuth() {
-  globalLoading = true;
+function hydrateAuth(): Promise<void> {
+  if (hydrationPromise) {
+    return hydrationPromise;
+  }
+
+  authState = { ...authState, loading: true };
   notify();
 
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    setAuth(error ? null : data.session);
-  } catch (error) {
-    console.error('Failed to restore the auth session:', error);
-    setAuth(null);
-  }
+  hydrationPromise = (async () => {
+    const timeout = setTimeout(() => {
+      console.error('Timed out while restoring the auth session.');
+      setAuth(null);
+    }, AUTH_SESSION_TIMEOUT_MS);
+
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('Failed to restore the auth session:', error);
+      }
+      setAuth(error ? null : data.session);
+    } catch (error) {
+      console.error('Failed to restore the auth session:', error);
+      setAuth(null);
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+
+  return hydrationPromise;
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 export function useAuth(): AuthState {
-  const [, forceRender] = useState(0);
-
   useEffect(() => {
-    const listener = () => forceRender((n) => n + 1);
-    listeners.add(listener);
-
-    void hydrateAuth();
-
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuth(session);
     });
+    void hydrateAuth();
 
     return () => {
-      listeners.delete(listener);
       authListener.subscription.unsubscribe();
     };
   }, []);
 
-  return {
-    session: globalSession,
-    user: globalUser,
-    loading: globalLoading,
-  };
+  return useSyncExternalStore(subscribe, () => authState, () => authState);
 }
 
 async function upsertProfileForUser(
@@ -155,4 +173,3 @@ export async function signOut() {
   void supabase.auth.signOut().catch(() => {});
   return { error: null };
 }
-
