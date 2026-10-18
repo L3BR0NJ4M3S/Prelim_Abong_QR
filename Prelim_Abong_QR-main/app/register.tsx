@@ -113,7 +113,7 @@ export default function RegisterScreen() {
             ) : (
               <MotionView delay={110} duration={MOTION.screen}>
               <View style={styles.form}>
-                <Text style={styles.label}>Full Name</Text>
+                <FieldLabel title="Full Name" valid={fullName.trim().length > 0} />
                 <TextInput
                   style={styles.input}
                   value={fullName}
@@ -123,7 +123,10 @@ export default function RegisterScreen() {
                   editable={!loading}
                 />
 
-                <Text style={styles.label}>Email</Text>
+                <FieldLabel
+                  title="Email"
+                  valid={/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())}
+                />
                 <TextInput
                   style={styles.input}
                   value={email}
@@ -135,7 +138,7 @@ export default function RegisterScreen() {
                   editable={!loading}
                 />
 
-                <Text style={styles.label}>Password</Text>
+                <FieldLabel title="Password" valid={password.length >= 6} />
                 <View style={styles.passwordField}>
                   <TextInput
                     style={[styles.input, styles.passwordInput]}
@@ -161,7 +164,10 @@ export default function RegisterScreen() {
                   </Pressable>
                 </View>
 
-                <Text style={styles.label}>Confirm Password</Text>
+                <FieldLabel
+                  title="Confirm Password"
+                  valid={confirmPassword.length > 0 && confirmPassword === password}
+                />
                 <View style={styles.passwordField}>
                   <TextInput
                     style={[styles.input, styles.passwordInput]}
@@ -223,6 +229,24 @@ export default function RegisterScreen() {
   );
 }
 
+function FieldLabel({ title, valid }: { title: string; valid: boolean }) {
+  return (
+    <View style={styles.fieldLabelRow}>
+      <Text style={styles.label}>{title}</Text>
+      {valid && (
+        <MotionView
+          accessibilityLabel={`${title} is valid`}
+          duration={MOTION.press}
+          offset={0}
+          style={styles.validMark}
+        >
+          <Ionicons name="checkmark-circle" size={17} color={COLORS.workflowSuccess} />
+        </MotionView>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -269,6 +293,15 @@ const styles = StyleSheet.create({
     color: COLORS.workflowText,
     marginBottom: 6,
     marginTop: 10,
+  },
+  fieldLabelRow: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  validMark: {
+    marginTop: 4,
   },
   input: {
     backgroundColor: COLORS.workflowSurfaceRaised,
