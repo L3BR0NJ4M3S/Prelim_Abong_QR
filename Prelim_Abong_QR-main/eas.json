@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 23.2.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+        "ORG_GRADLE_JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+        "ORG_GRADLE_JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+        "ORG_GRADLE_JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
