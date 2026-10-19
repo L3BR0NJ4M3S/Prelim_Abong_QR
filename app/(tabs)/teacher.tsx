@@ -3,7 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -23,7 +23,7 @@ import AppButton from '@/components/AppButton';
 import MotionShake from '@/components/MotionShake';
 import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
-import { useAuth } from '@/lib/auth';
+import { signOut, useAuth } from '@/lib/auth';
 import { getTeacherEventAttendance, setTeacherEventActive, type TeacherEventAttendance } from '@/lib/attendance';
 import { createEvent, type CreatedEvent } from '@/lib/events';
 import { getProfile, type Role } from '@/lib/profiles';
@@ -77,6 +77,7 @@ function getAnalyticsPeriodStart(period: AnalyticsPeriod, now: Date): Date | nul
 
 export default function TeacherScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [role, setRole] = useState<Role | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
   const [title, setTitle] = useState('');
@@ -103,6 +104,11 @@ export default function TeacherScreen() {
   const [analyticsSearch, setAnalyticsSearch] = useState('');
   const [analyticsSort, setAnalyticsSort] = useState<AnalyticsSort>('newest');
   const analyticsRequestInProgress = useRef(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/login');
+  };
 
   const refreshAnalytics = useCallback(async (showLoading = false) => {
     if (!user || analyticsRequestInProgress.current) return;
@@ -448,6 +454,21 @@ export default function TeacherScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Teacher Portal</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          onPress={() => void handleSignOut()}
+          style={({ pressed }) => [
+            styles.signOutButton,
+            pressed && styles.signOutButtonPressed,
+          ]}
+        >
+          <Ionicons name="log-out-outline" size={18} color={COLORS.textPrimary} />
+          <Text style={styles.signOutLabel}>Sign Out</Text>
+        </Pressable>
+      </View>
       <MotionView style={styles.analyticsSection} delay={40} duration={380}>
         <View style={styles.analyticsHeader}>
           <View style={styles.analyticsHeading}>
@@ -906,6 +927,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 40,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  pageTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.workflowBorder,
+    borderRadius: 10,
+    backgroundColor: COLORS.workflowSurface,
+  },
+  signOutButtonPressed: {
+    opacity: 0.72,
+  },
+  signOutLabel: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   accessContent: {
     flexGrow: 1,
