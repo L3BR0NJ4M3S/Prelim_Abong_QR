@@ -1,9 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
+import type { Role } from './profiles';
 import type { Session, User } from '@supabase/supabase-js';
 
 export type SignUpProfile = {
   full_name: string;
+  role: Role;
 };
 
 type AuthState = {
@@ -85,26 +87,6 @@ export function useAuth(): AuthState {
   return useSyncExternalStore(subscribe, () => authState, () => authState);
 }
 
-async function upsertProfileForUser(
-  userId: string,
-  email: string,
-  profile?: SignUpProfile
-) {
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        email: email.trim(),
-        full_name: profile?.full_name ?? '',
-        role: 'student',
-      },
-      { onConflict: 'id' }
-    );
-
-  return { error };
-}
-
 async function ensureProfileExists(userId: string, email: string) {
   const { data: existingProfile, error: lookupError } = await supabase
     .from('profiles')
@@ -131,15 +113,18 @@ async function ensureProfileExists(userId: string, email: string) {
 }
 
 export async function signUp(email: string, password: string, profile?: SignUpProfile) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: profile?.full_name ?? '',
+        requested_role: profile?.role ?? 'student',
+      },
+    },
+  });
 
   if (!error) {
-    const user = data.user ?? data.session?.user;
-
-    if (user && profile) {
-      await upsertProfileForUser(user.id, user.email ?? email, profile);
-    }
-
     if (data.session) {
       setAuth(data.session);
     }

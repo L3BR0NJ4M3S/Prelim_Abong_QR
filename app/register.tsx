@@ -22,7 +22,14 @@ import MotionShake from '@/components/MotionShake';
 import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
 import { signUp } from '@/lib/auth';
+import { getRoleLandingPath, type Role } from '@/lib/profiles';
 import { MOTION } from '@/lib/motion';
+
+const SIGNUP_ROLES: { role: Role; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { role: 'student', label: 'Student', icon: 'person-outline' },
+  { role: 'teacher', label: 'Teacher', icon: 'school-outline' },
+  { role: 'admin', label: 'Admin', icon: 'shield-checkmark-outline' },
+];
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
@@ -30,6 +37,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<Role>('student');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +67,13 @@ export default function RegisterScreen() {
     try {
       const { data, error: authError } = await signUp(email.trim(), password, {
         full_name: fullName.trim(),
+        role,
       });
 
       if (authError) {
         setError(authError.message);
       } else if (data.session) {
-        router.replace('/(tabs)');
+        router.replace(getRoleLandingPath(role));
       } else {
         setSuccess(true);
       }
@@ -113,6 +122,7 @@ export default function RegisterScreen() {
             ) : (
               <MotionView delay={110} duration={MOTION.screen}>
               <View style={styles.form}>
+                <MotionView delay={0} duration={MOTION.interface}>
                 <FieldLabel title="Full Name" valid={fullName.trim().length > 0} />
                 <TextInput
                   style={styles.input}
@@ -123,6 +133,39 @@ export default function RegisterScreen() {
                   editable={!loading}
                 />
 
+                <Text style={styles.label}>Account type</Text>
+                <View style={styles.roleOptions}>
+                  {SIGNUP_ROLES.map((option) => {
+                    const selected = role === option.role;
+                    return (
+                      <Pressable
+                        key={option.role}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected, disabled: loading }}
+                        disabled={loading}
+                        onPress={() => setRole(option.role)}
+                        style={[styles.roleOption, selected && styles.roleOptionSelected]}
+                      >
+                        <Ionicons
+                          name={option.icon}
+                          size={18}
+                          color={selected ? COLORS.workflowAccent : COLORS.workflowMuted}
+                        />
+                        <Text
+                          style={[
+                            styles.roleOptionText,
+                            selected && styles.roleOptionTextSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                </MotionView>
+
+                <MotionView delay={60} duration={MOTION.interface}>
                 <FieldLabel
                   title="Email"
                   valid={/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())}
@@ -137,7 +180,9 @@ export default function RegisterScreen() {
                   keyboardType="email-address"
                   editable={!loading}
                 />
+                </MotionView>
 
+                <MotionView delay={120} duration={MOTION.interface}>
                 <FieldLabel title="Password" valid={password.length >= 6} />
                 <View style={styles.passwordField}>
                   <TextInput
@@ -163,7 +208,9 @@ export default function RegisterScreen() {
                     />
                   </Pressable>
                 </View>
+                </MotionView>
 
+                <MotionView delay={180} duration={MOTION.interface}>
                 <FieldLabel
                   title="Confirm Password"
                   valid={confirmPassword.length > 0 && confirmPassword === password}
@@ -194,6 +241,7 @@ export default function RegisterScreen() {
                     />
                   </Pressable>
                 </View>
+                </MotionView>
 
                 {error && (
                   <MotionShake trigger={error}>
@@ -302,6 +350,34 @@ const styles = StyleSheet.create({
   },
   validMark: {
     marginTop: 4,
+  },
+  roleOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  roleOption: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.workflowBorder,
+    borderRadius: 8,
+    backgroundColor: COLORS.workflowSurfaceRaised,
+  },
+  roleOptionSelected: {
+    borderColor: COLORS.workflowAccent,
+    backgroundColor: '#EEE5D3',
+  },
+  roleOptionText: {
+    color: COLORS.workflowMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  roleOptionTextSelected: {
+    color: COLORS.workflowAccent,
   },
   input: {
     backgroundColor: COLORS.workflowSurfaceRaised,

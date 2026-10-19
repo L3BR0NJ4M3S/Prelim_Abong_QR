@@ -13,6 +13,7 @@ import {
 
 import AppButton from '@/components/AppButton';
 import Header from '@/components/Header';
+import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
 import {
   getStudentDashboardData,
@@ -64,11 +65,11 @@ export default function Index() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerContainer}>
+        <MotionView style={styles.headerContainer} duration={360}>
           <Header title="QR Attendance" />
-        </View>
+        </MotionView>
 
-        <View style={styles.headingRow}>
+        <MotionView style={styles.headingRow} delay={35}>
           <View>
             <Text style={styles.mainTitle}>Attendance Overview</Text>
             <Text style={styles.subtitle}>Your participation at a glance.</Text>
@@ -86,7 +87,7 @@ export default function Index() {
               <Ionicons name="refresh-outline" size={21} color={COLORS.primary} />
             )}
           </Pressable>
-        </View>
+        </MotionView>
 
         {error && (
           <View style={styles.errorBanner}>
@@ -108,7 +109,7 @@ export default function Index() {
           </View>
         ) : dashboard ? (
           <>
-            <View style={styles.metricsRow}>
+            <MotionView style={styles.metricsRow} delay={60} duration={360}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>Events attended</Text>
                 <Text style={styles.metricValue}>{dashboard.totalAttended}</Text>
@@ -121,9 +122,9 @@ export default function Index() {
                 </Text>
                 <Text style={styles.metricHint}>Recorded check-ins</Text>
               </View>
-            </View>
+            </MotionView>
 
-            <View style={styles.sectionCard}>
+            <MotionView style={styles.sectionCard} delay={110}>
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>Monthly attendance</Text>
                 <Ionicons
@@ -153,9 +154,9 @@ export default function Index() {
                   </View>
                 ))}
               </View>
-            </View>
+            </MotionView>
 
-            <View style={styles.sectionCard}>
+            <MotionView style={styles.sectionCard} delay={170}>
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>Upcoming events</Text>
                 <Ionicons
@@ -167,8 +168,9 @@ export default function Index() {
               {dashboard.upcomingEvents.length === 0 ? (
                 <Text style={styles.emptyText}>No upcoming events available.</Text>
               ) : (
-                dashboard.upcomingEvents.map((event) => (
-                  <View key={event.id} style={styles.eventRow}>
+                dashboard.upcomingEvents.map((event, index) => (
+                  <MotionView key={event.id} delay={Math.min(index * 55, 220)} offset={8}>
+                  <View style={styles.eventRow}>
                     <View style={styles.eventIcon}>
                       <Ionicons
                         name="calendar"
@@ -185,11 +187,12 @@ export default function Index() {
                       </Text>
                     </View>
                   </View>
+                  </MotionView>
                 ))
               )}
-            </View>
+            </MotionView>
 
-            <View style={styles.sectionCard}>
+            <MotionView style={styles.sectionCard} delay={230}>
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>Recent attendance</Text>
                 <Pressable
@@ -204,8 +207,9 @@ export default function Index() {
                   Your recorded check-ins will appear here.
                 </Text>
               ) : (
-                dashboard.recentAttendance.map((record) => (
-                  <View key={record.id} style={styles.attendanceRow}>
+                dashboard.recentAttendance.map((record, index) => (
+                  <MotionView key={record.id} delay={Math.min(index * 55, 220)} offset={8}>
+                  <View style={styles.attendanceRow}>
                     <View style={styles.checkIcon}>
                       <Ionicons
                         name="checkmark"
@@ -222,9 +226,10 @@ export default function Index() {
                       </Text>
                     </View>
                   </View>
+                  </MotionView>
                 ))
               )}
-            </View>
+            </MotionView>
           </>
         ) : !loading && !error ? (
           <View style={styles.emptyDashboard}>
@@ -232,7 +237,7 @@ export default function Index() {
           </View>
         ) : null}
 
-        <View style={styles.footerContainer}>
+        <MotionView style={styles.footerContainer} delay={290} duration={360}>
           <AppButton
             theme="primary"
             title="Scan QR Code"
@@ -249,7 +254,7 @@ export default function Index() {
             icon="person-outline"
             onPress={() => router.push('/profile')}
           />
-        </View>
+        </MotionView>
       </ScrollView>
     </SafeAreaView>
   );

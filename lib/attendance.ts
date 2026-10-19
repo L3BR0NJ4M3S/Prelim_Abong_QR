@@ -27,6 +27,7 @@ export type TeacherEventAttendance = {
   title: string;
   startTime: string | null;
   endTime: string | null;
+  isActive: boolean;
   attendeeCount: number;
   attendees: {
     studentId: string;
@@ -165,7 +166,7 @@ export async function getTeacherEventAttendance(
 ): Promise<TeacherEventAttendance[]> {
   const { data: events, error: eventError } = await supabase
     .from('events')
-    .select('id, event_code, title, start_time, end_time, created_at')
+    .select('id, event_code, title, start_time, end_time, is_active, created_at')
     .eq('created_by', teacherId)
     .order('created_at', { ascending: false });
 
@@ -195,6 +196,7 @@ export async function getTeacherEventAttendance(
       title: event.title,
       startTime: event.start_time,
       endTime: event.end_time,
+      isActive: event.is_active,
       attendeeCount: 0,
       attendees: [],
     }));
@@ -209,6 +211,7 @@ export async function getTeacherEventAttendance(
       title: event.title,
       startTime: event.start_time,
       endTime: event.end_time,
+      isActive: event.is_active,
       attendeeCount: rows.length,
       attendees: rows.map((entry: any) => ({
         studentId: entry.student_id,
@@ -216,4 +219,17 @@ export async function getTeacherEventAttendance(
       })),
     };
   });
+}
+
+export async function setTeacherEventActive(
+  eventId: string,
+  isActive: boolean
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('events')
+    .update({ is_active: isActive })
+    .eq('id', eventId)
+    .select('id');
+  if (error) throw error;
+  if (!data?.length) throw new Error('You cannot manage this event.');
 }

@@ -1,21 +1,27 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useCallback, useRef, useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Animated,
+  Easing,
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   Vibration,
   View,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
 import AppButton from '@/components/AppButton';
+import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { registerAttendance } from '@/lib/attendance';
+import { useReducedMotion } from '@/lib/motion';
 
 export default function ScanScreen() {
   const { user } = useAuth();
@@ -25,9 +31,13 @@ export default function ScanScreen() {
   const [success, setSuccess] = useState(false);
   const [busy, setBusy] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const [manualPayload, setManualPayload] = useState('');
   const requestInProgress = useRef(false);
   const [screenFocused, setScreenFocused] = useState(true);
+  const reducedMotion = useReducedMotion();
+  const scanProgress = useRef(new Animated.Value(0)).current;
+  const framePulse = useRef(new Animated.Value(0)).current;
+  const resultProgress = useRef(new Animated.Value(0)).current;
+  const highlightProgress = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -37,6 +47,95 @@ export default function ScanScreen() {
       };
     }, [])
   );
+
+  useEffect(() => {
+    const scanning = screenFocused && !scanned && !busy && !reducedMotion;
+    if (!scanning) {
+      scanProgress.stopAnimation();
+      framePulse.stopAnimation();
+      scanProgress.setValue(0);
+      framePulse.setValue(0);
+      return;
+    }
+
+    const lineAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanProgress, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanProgress, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(framePulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(framePulse, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    lineAnimation.start();
+    pulseAnimation.start();
+    return () => {
+      lineAnimation.stop();
+      pulseAnimation.stop();
+    };
+  }, [busy, framePulse, reducedMotion, scanProgress, scanned, screenFocused]);
+
+  useEffect(() => {
+    resultProgress.stopAnimation();
+    highlightProgress.stopAnimation();
+    resultProgress.setValue(0);
+    highlightProgress.setValue(0);
+
+    if (!scanned || busy || !message || reducedMotion) {
+      if (reducedMotion && scanned && !busy && message) {
+        resultProgress.setValue(1);
+      }
+      return;
+    }
+
+    const feedbackAnimation = Animated.parallel([
+      Animated.timing(resultProgress, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.timing(highlightProgress, {
+          toValue: 1,
+          duration: 100,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(highlightProgress, {
+          toValue: 0,
+          duration: 650,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+    feedbackAnimation.start();
+    return () => feedbackAnimation.stop();
+  }, [busy, highlightProgress, message, reducedMotion, resultProgress, scanned]);
 
   const handleScan = async (data: string) => {
     if (requestInProgress.current || !screenFocused) return;
@@ -75,7 +174,6 @@ export default function ScanScreen() {
     setScanned(false);
     setMessage(null);
     setSuccess(false);
-    setManualPayload('');
   };
 
   if (!permission) {
@@ -86,7 +184,12 @@ export default function ScanScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.permissionContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.permissionCard}>
           <Text style={styles.title}>Camera Permission Needed</Text>
           <Text style={styles.subtitle}>
@@ -98,12 +201,6 @@ export default function ScanScreen() {
             icon="camera"
             onPress={requestPermission}
           />
-          <ManualPayloadEntry
-            value={manualPayload}
-            onChangeText={setManualPayload}
-            onSubmit={() => void handleScan(manualPayload.trim())}
-            disabled={!manualPayload.trim() || busy}
-          />
           {Platform.OS !== 'web' && !permission.canAskAgain && (
             <AppButton
               title="Open Settings"
@@ -112,7 +209,7 @@ export default function ScanScreen() {
             />
           )}
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -126,7 +223,52 @@ export default function ScanScreen() {
         onBarcodeScanned={scanned || !screenFocused ? undefined : handleBarcodeScanned}
       />
 
-      <View style={styles.overlay}>
+      {!scanned && !busy && screenFocused && (
+        <View pointerEvents="none" style={styles.scannerOverlay}>
+          <Animated.View
+            style={[
+              styles.scanFrame,
+              {
+                opacity: framePulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.62, 1],
+                }),
+              },
+            ]}
+          >
+            <View style={[styles.frameCorner, styles.frameTopLeft]} />
+            <View style={[styles.frameCorner, styles.frameTopRight]} />
+            <View style={[styles.frameCorner, styles.frameBottomLeft]} />
+            <View style={[styles.frameCorner, styles.frameBottomRight]} />
+            <Animated.View
+              style={[
+                styles.scanLine,
+                {
+                  transform: [
+                    {
+                      translateY: scanProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, 232],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </Animated.View>
+          <View style={styles.scanningIndicator}>
+            <Ionicons name="scan-outline" size={15} color={COLORS.workflowAccent} />
+            <Text style={styles.scanningText}>SCANNING LIVE</Text>
+          </View>
+        </View>
+      )}
+
+      <ScrollView
+        style={styles.overlay}
+        contentContainerStyle={styles.overlayContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {Platform.OS !== 'web' && (
           <Pressable
             accessibilityRole="button"
@@ -143,19 +285,46 @@ export default function ScanScreen() {
           {busy ? 'Verifying attendance...' : scanned ? 'QR Code detected!' : 'Point your camera at a QR code'}
         </Text>
 
-        {scanned && message && (
-          <Text style={[styles.scanResult, success ? styles.success : styles.error]}>
-            {message}
-          </Text>
-        )}
+        {busy && <ActivityIndicator color={COLORS.workflowAccent} style={styles.processingIndicator} />}
 
-        {!scanned && (
-          <ManualPayloadEntry
-            value={manualPayload}
-            onChangeText={setManualPayload}
-            onSubmit={() => void handleScan(manualPayload.trim())}
-            disabled={!manualPayload.trim() || busy}
-          />
+        {scanned && message && (
+          <MotionView style={styles.resultRow} offset={0} scaleFrom={0.9} duration={240}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFillObject,
+                styles.resultHighlight,
+                {
+                  backgroundColor: success
+                    ? 'rgba(82, 116, 91, 0.18)'
+                    : 'rgba(184, 74, 74, 0.14)',
+                  opacity: highlightProgress,
+                },
+              ]}
+            />
+            <Animated.View
+              style={{
+                opacity: resultProgress,
+                transform: [
+                  {
+                    scale: resultProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.78, 1],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Ionicons
+                name={success ? 'checkmark-circle' : 'close-circle'}
+                size={22}
+                color={success ? COLORS.workflowSuccess : COLORS.workflowDanger}
+              />
+            </Animated.View>
+            <Text accessibilityRole="alert" style={[styles.scanResult, success ? styles.success : styles.error]}>
+              {message}
+            </Text>
+          </MotionView>
         )}
 
         {scanned && !busy && (
@@ -166,44 +335,7 @@ export default function ScanScreen() {
             onPress={handleScanAgain}
           />
         )}
-      </View>
-    </View>
-  );
-}
-
-type ManualPayloadEntryProps = {
-  value: string;
-  onChangeText: (value: string) => void;
-  onSubmit: () => void;
-  disabled: boolean;
-};
-
-function ManualPayloadEntry({
-  value,
-  onChangeText,
-  onSubmit,
-  disabled,
-}: ManualPayloadEntryProps) {
-  return (
-    <View style={styles.manualEntry}>
-      <TextInput
-        accessibilityLabel="Manual attendance QR payload"
-        style={styles.manualInput}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder="Or paste the attendance QR payload"
-        placeholderTextColor={COLORS.workflowMuted}
-        autoCapitalize="none"
-        autoCorrect={false}
-        multiline
-      />
-      <AppButton
-        theme="primary"
-        title="Submit Code"
-        icon="enter-outline"
-        disabled={disabled}
-        onPress={onSubmit}
-      />
+      </ScrollView>
     </View>
   );
 }
@@ -212,9 +344,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
   },
   permissionCard: {
     width: '100%',
@@ -224,6 +353,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.workflowBorder,
     backgroundColor: COLORS.workflowSurface,
+  },
+  permissionContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   camera: {
     ...StyleSheet.absoluteFillObject,
@@ -246,12 +382,16 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     bottom: 60,
+    maxHeight: '56%',
     backgroundColor: COLORS.workflowSurface,
     borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.workflowBorder,
+    overflow: 'hidden',
+  },
+  overlayContent: {
+    alignItems: 'center',
+    padding: 16,
   },
   overlayText: {
     fontSize: 16,
@@ -259,6 +399,98 @@ const styles = StyleSheet.create({
     color: COLORS.workflowText,
     marginBottom: 6,
     textAlign: 'center',
+  },
+  processingIndicator: {
+    marginVertical: 8,
+  },
+  scannerOverlay: {
+    position: 'absolute',
+    top: '17%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  scanFrame: {
+    width: 250,
+    height: 250,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  frameCorner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: COLORS.workflowAccent,
+  },
+  frameTopLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 12,
+  },
+  frameTopRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 12,
+  },
+  frameBottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 12,
+  },
+  frameBottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 12,
+  },
+  scanLine: {
+    position: 'absolute',
+    top: 8,
+    left: 12,
+    right: 12,
+    height: 2,
+    backgroundColor: COLORS.workflowAccent,
+    shadowColor: COLORS.workflowAccent,
+    shadowOpacity: 0.8,
+    shadowRadius: 7,
+    elevation: 5,
+  },
+  scanningIndicator: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: COLORS.workflowSurface,
+  },
+  scanningText: {
+    color: COLORS.workflowAccent,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  resultRow: {
+    position: 'relative',
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 8,
+    padding: 8,
+    borderRadius: 8,
+  },
+  resultHighlight: {
+    borderRadius: 8,
   },
   scanResult: {
     fontSize: 14,
@@ -284,22 +516,5 @@ const styles = StyleSheet.create({
     color: COLORS.workflowAccent,
     fontSize: 12,
     fontWeight: '700',
-  },
-  manualEntry: {
-    alignSelf: 'stretch',
-    marginTop: 12,
-  },
-  manualInput: {
-    minHeight: 48,
-    maxHeight: 100,
-    borderColor: COLORS.workflowBorder,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: COLORS.workflowText,
-    backgroundColor: COLORS.workflowSurfaceRaised,
-    fontSize: 14,
-    marginBottom: 8,
   },
 });

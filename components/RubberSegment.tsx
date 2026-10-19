@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -18,12 +19,13 @@ const INSET = 3;
 
 type Props = {
   items: readonly string[];
+  icons?: Partial<Record<string, keyof typeof Ionicons.glyphMap>>;
   value: string;
   onChange: (value: string, index: number) => void;
   style?: StyleProp<ViewStyle>;
 };
 
-export default function RubberSegment({ items, value, onChange, style }: Props) {
+export default function RubberSegment({ items, icons, value, onChange, style }: Props) {
   const selectedIndex = Math.max(0, items.indexOf(value));
   const [measuredWidth, setMeasuredWidth] = useState(0);
   const selectedIndexRef = useRef(selectedIndex);
@@ -124,9 +126,17 @@ export default function RubberSegment({ items, value, onChange, style }: Props) 
             style={styles.option}
           >
             <View style={styles.optionContent}>
-              <Text style={[styles.optionText, selected && styles.selectedText]}>
-                {item}
-              </Text>
+              {icons?.[item] ? (
+                <Ionicons
+                  name={icons[item]}
+                  size={21}
+                  color={selected ? COLORS.textOnPrimary : COLORS.textSecondary}
+                />
+              ) : (
+                <Text style={[styles.optionText, selected && styles.selectedText]}>
+                  {item}
+                </Text>
+              )}
             </View>
           </Pressable>
         );

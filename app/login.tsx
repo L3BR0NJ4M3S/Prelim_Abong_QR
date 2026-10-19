@@ -22,6 +22,7 @@ import MotionShake from '@/components/MotionShake';
 import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
 import { signIn } from '@/lib/auth';
+import { getProfile, getRoleLandingPath } from '@/lib/profiles';
 import { MOTION } from '@/lib/motion';
 
 export default function LoginScreen() {
@@ -40,12 +41,13 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const { error: authError } = await signIn(email.trim(), password);
+      const { data, error: authError } = await signIn(email.trim(), password);
 
       if (authError) {
         setError(authError.message);
       } else {
-        router.replace('/(tabs)');
+        const profile = data.user ? await getProfile(data.user.id) : null;
+        router.replace(getRoleLandingPath(profile?.role ?? 'student'));
       }
     } catch (err: any) {
       setError(err?.message || 'Unexpected error');

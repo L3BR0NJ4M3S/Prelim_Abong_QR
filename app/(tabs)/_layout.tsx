@@ -1,9 +1,12 @@
 import { router, Tabs, usePathname } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import RubberSegment from '@/components/RubberSegment';
 import { COLORS } from '@/constants/colors';
+import { useAuth } from '@/lib/auth';
+import { getProfile, type Role } from '@/lib/profiles';
 
 const NAV_ITEMS = ['Home', 'History', 'Scan', 'Profile', 'Teacher'] as const;
 const NAV_PATHS = ['/', '/history', '/scan', '/profile', '/teacher'] as const;
@@ -19,6 +22,13 @@ function SegmentTabBar() {
     <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       <RubberSegment
         items={NAV_ITEMS}
+        icons={{
+          Home: 'home-outline',
+          History: 'time-outline',
+          Scan: 'scan-outline',
+          Profile: 'person-outline',
+          Teacher: 'school-outline',
+        }}
         value={NAV_ITEMS[currentIndex]}
         onChange={(_value, index) => router.navigate(NAV_PATHS[index])}
         style={styles.segment}
@@ -28,9 +38,31 @@ function SegmentTabBar() {
 }
 
 export default function TabLayout() {
+  const { user } = useAuth();
+  const [role, setRole] = useState<Role | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setRole(null);
+      return;
+    }
+
+    let active = true;
+    void getProfile(user.id).then((profile) => {
+      if (active) setRole(profile?.role ?? 'student');
+    }).catch((error: unknown) => {
+      console.error('Could not load tab access role:', error);
+      if (active) setRole('student');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   return (
     <Tabs
-      tabBar={() => <SegmentTabBar />}
+      tabBar={() => role === 'student' ? <SegmentTabBar /> : null}
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.background },
         headerShadowVisible: false,

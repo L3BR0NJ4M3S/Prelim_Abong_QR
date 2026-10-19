@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -161,8 +162,15 @@ export default function WelcomeScreen() {
   });
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 18 }]}>
-      <View style={styles.ornamentTop} />
+    <View style={styles.container}>
+      <View pointerEvents="none" style={styles.ornamentTop} />
+      <ScrollView
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 18 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
       {stage === 'splash' || checking ? (
         <View style={styles.splashContent}>
           <Animated.View style={[styles.seal, { transform: [{ rotate: splashRotate }] }]}>
@@ -250,7 +258,8 @@ export default function WelcomeScreen() {
           </View>
         </>
       )}
-      <View style={styles.ornamentBottom} />
+      </ScrollView>
+      <View pointerEvents="none" style={styles.ornamentBottom} />
     </View>
   );
 }
@@ -258,10 +267,13 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'space-between',
     backgroundColor: COLORS.background,
-    paddingHorizontal: 26,
     overflow: 'hidden',
+  },
+  contentContainer: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 26,
   },
   ornamentTop: {
     position: 'absolute',

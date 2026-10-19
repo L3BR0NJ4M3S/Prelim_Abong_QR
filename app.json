@@ -37,6 +37,14 @@
           "backgroundColor": "#15130F"
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow QR-ATT to scan school event attendance codes.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-sqlite",
       "@react-native-community/datetimepicker",
       "expo-secure-store",

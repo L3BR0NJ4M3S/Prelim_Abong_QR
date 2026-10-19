@@ -11,6 +11,7 @@ import {
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import SwipeArchiveRow from '@/components/SwipeArchiveRow';
+import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import {
@@ -111,7 +112,9 @@ export default function HistoryScreen() {
   if (role === 'teacher') {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Event Attendance</Text>
+        <MotionView duration={340}>
+          <Text style={styles.title}>Event Attendance</Text>
+        </MotionView>
 
         {teacherEvents.length === 0 ? (
           <Text style={styles.subtitle}>
@@ -122,7 +125,8 @@ export default function HistoryScreen() {
             data={teacherEvents}
             keyExtractor={(item) => item.eventId}
             contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
+              <MotionView delay={Math.min(index * 60, 300)}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.eventTitle}>{item.title}</Text>
@@ -152,6 +156,7 @@ export default function HistoryScreen() {
                   </View>
                 )}
               </View>
+              </MotionView>
             )}
           />
         )}
@@ -248,7 +253,7 @@ export default function HistoryScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.confirmationCard}>
+          {recordToDelete && <MotionView style={styles.confirmationCard} offset={0} scaleFrom={0.96} duration={240}>
             <Text style={styles.confirmationTitle}>Delete attendance record?</Text>
             <Text style={styles.confirmationText}>
               This permanently removes your attendance record from history and event reports.
@@ -278,22 +283,24 @@ export default function HistoryScreen() {
                 </Text>
               </Pressable>
             </View>
-          </View>
+          </MotionView>}
         </View>
       </Modal>
 
       {visibleRecords.length === 0 ? (
+        <MotionView duration={320}>
         <Text style={styles.subtitle}>
           {showArchive
             ? 'No archived attendance yet. Swipe a record left and tap Archive to move it here.'
             : 'No records yet. Scan a QR code to register your attendance.'}
         </Text>
+        </MotionView>
       ) : (
         <FlatList
           data={visibleRecords}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <SwipeArchiveRow
               actionLabel={showArchive ? 'Restore' : 'Archive'}
               onAction={() => void handleArchiveChange(item.id, !showArchive)}
@@ -302,11 +309,13 @@ export default function HistoryScreen() {
                 setRecordToDelete(item);
               }}
             >
+              <MotionView delay={Math.min(index * 55, 275)}>
               <View style={styles.card}>
                 <Text style={styles.eventTitle}>{item.eventTitle}</Text>
                 <Text style={styles.eventMeta}>{item.eventId}</Text>
                 <Text style={styles.eventMeta}>{formatDate(item.scannedAt)}</Text>
               </View>
+              </MotionView>
             </SwipeArchiveRow>
           )}
         />

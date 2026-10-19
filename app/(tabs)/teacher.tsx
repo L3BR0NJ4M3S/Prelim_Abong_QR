@@ -20,9 +20,11 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 
 import AppButton from '@/components/AppButton';
+import MotionShake from '@/components/MotionShake';
+import MotionView from '@/components/MotionView';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
-import { getTeacherEventAttendance, type TeacherEventAttendance } from '@/lib/attendance';
+import { getTeacherEventAttendance, setTeacherEventActive, type TeacherEventAttendance } from '@/lib/attendance';
 import { createEvent, type CreatedEvent } from '@/lib/events';
 import { getProfile, type Role } from '@/lib/profiles';
 import { buildQRPayload } from '@/lib/qr';
@@ -96,6 +98,7 @@ export default function TeacherScreen() {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [lastAnalyticsUpdate, setLastAnalyticsUpdate] = useState<Date | null>(null);
   const [exportingReport, setExportingReport] = useState(false);
+  const [updatingEventId, setUpdatingEventId] = useState<string | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('All time');
   const [analyticsSearch, setAnalyticsSearch] = useState('');
   const [analyticsSort, setAnalyticsSort] = useState<AnalyticsSort>('newest');
@@ -189,18 +192,26 @@ export default function TeacherScreen() {
 
   if (roleLoading) {
     return (
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.accessContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>Teacher Portal</Text>
         <Text style={styles.subtitle}>Checking your account...</Text>
-      </View>
+      </ScrollView>
     );
   }
 
   if (role !== 'teacher') {
     return (
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.accessContent}
+        showsVerticalScrollIndicator={false}
+      >
         <TeacherAccessCard />
-      </View>
+      </ScrollView>
     );
   }
 
@@ -358,6 +369,23 @@ export default function TeacherScreen() {
     }
   };
 
+  const handleToggleEvent = async (event: TeacherEventAttendance) => {
+    if (updatingEventId) return;
+    setUpdatingEventId(event.eventId);
+    setAnalyticsError(null);
+    try {
+      await setTeacherEventActive(event.eventId, !event.isActive);
+      setAnalyticsEvents((current) => current.map((item) => item.eventId === event.eventId
+        ? { ...item, isActive: !item.isActive }
+        : item));
+    } catch (error) {
+      console.error('Failed to update teacher event status:', error);
+      setAnalyticsError('Could not update this event. Please try again.');
+    } finally {
+      setUpdatingEventId(null);
+    }
+  };
+
   const analyticsNow = Date.now();
   const periodStart = getAnalyticsPeriodStart(analyticsPeriod, new Date(analyticsNow));
   const normalizedSearch = analyticsSearch.trim().toLocaleLowerCase();
@@ -420,7 +448,7 @@ export default function TeacherScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.analyticsSection}>
+      <MotionView style={styles.analyticsSection} delay={40} duration={380}>
         <View style={styles.analyticsHeader}>
           <View style={styles.analyticsHeading}>
             <Text style={styles.analyticsTitle}>Attendance Analytics</Text>
@@ -450,16 +478,16 @@ export default function TeacherScreen() {
         </View>
 
         <View style={styles.analyticsStats}>
-          <View style={styles.statCard}>
+          <MotionView style={styles.statCard} delay={70}>
             <Ionicons name="calendar-outline" size={21} color={COLORS.workflowAccent} />
             <Text style={styles.statValue}>{filteredEvents.length}</Text>
             <Text style={styles.statLabel}>Events</Text>
-          </View>
-          <View style={styles.statCard}>
+          </MotionView>
+          <MotionView style={styles.statCard} delay={125}>
             <Ionicons name="people-outline" size={21} color={COLORS.workflowAccent} />
             <Text style={styles.statValue}>{totalCheckIns}</Text>
             <Text style={styles.statLabel}>Present check-ins</Text>
-          </View>
+          </MotionView>
         </View>
         <Text style={styles.analyticsNote}>
           Totals reflect recorded check-ins. Attendance rates and absences are not shown
@@ -536,8 +564,9 @@ export default function TeacherScreen() {
           {filteredEvents.length === 0 ? (
             <Text style={styles.analyticsEmpty}>No events match this date range or search.</Text>
           ) : (
-            filteredEvents.map((event) => (
-              <View key={event.eventId} style={styles.comparisonRow}>
+            filteredEvents.map((event, index) => (
+              <MotionView key={event.eventId} delay={Math.min(index * 55, 220)} offset={8}>
+              <View style={styles.comparisonRow}>
                 <View style={styles.timelineDetails}>
                   <Text style={styles.timelineEvent} numberOfLines={1}>
                     {event.title}
@@ -551,7 +580,19 @@ export default function TeacherScreen() {
                 <Text style={styles.comparisonCount}>
                   {event.attendeeCount} {event.attendeeCount === 1 ? 'check-in' : 'check-ins'}
                 </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${event.isActive ? 'Deactivate' : 'Activate'} ${event.title}`}
+                  disabled={Boolean(updatingEventId)}
+                  onPress={() => void handleToggleEvent(event)}
+                  style={[styles.eventStatusButton, updatingEventId === event.eventId && styles.disabledButton]}
+                >
+                  <Text style={styles.eventStatusButtonText}>
+                    {event.isActive ? 'Pause' : 'Activate'}
+                  </Text>
+                </Pressable>
               </View>
+              </MotionView>
             ))
           )}
         </View>
@@ -569,11 +610,13 @@ export default function TeacherScreen() {
                 : 'No check-ins recorded yet.'}
             </Text>
           ) : (
-            recentCheckIns.map((checkIn, index) => (
-              <View
-                key={`${checkIn.studentId}-${checkIn.scannedAt}-${index}`}
-                style={styles.timelineRow}
+            recentCheckIns.map((checkIn) => (
+              <MotionView
+                key={`${checkIn.studentId}-${checkIn.scannedAt}-${checkIn.eventTitle}`}
+                delay={65}
+                offset={8}
               >
+              <View style={styles.timelineRow}>
                 <View style={styles.timelineDot} />
                 <View style={styles.timelineDetails}>
                   <Text style={styles.timelineEvent} numberOfLines={1}>
@@ -590,6 +633,7 @@ export default function TeacherScreen() {
                   })}
                 </Text>
               </View>
+              </MotionView>
             ))
           )}
         </View>
@@ -609,14 +653,15 @@ export default function TeacherScreen() {
             {exportingReport ? 'Preparing report...' : 'Export CSV Report'}
           </Text>
         </Pressable>
-      </View>
+      </MotionView>
 
-      <View style={styles.eventForm}>
+      <MotionView style={styles.eventForm} delay={120} duration={380}>
         <Text style={styles.eventFormTitle}>Create Event QR</Text>
         <Text style={styles.eventFormSubtitle}>
           Fill in the event details, then scan the generated QR with the Scan tab.
         </Text>
 
+        <MotionView delay={70}>
         <Text style={styles.label}>Event Title</Text>
         <TextInput
           style={styles.input}
@@ -637,7 +682,9 @@ export default function TeacherScreen() {
           multiline
           maxLength={1000}
         />
+        </MotionView>
 
+        <MotionView delay={130}>
         <Text style={styles.label}>Venue</Text>
         <TextInput
           style={styles.input}
@@ -657,7 +704,9 @@ export default function TeacherScreen() {
           placeholderTextColor={COLORS.workflowMuted}
           autoCapitalize="characters"
         />
+        </MotionView>
 
+        <MotionView delay={190}>
         <Text style={styles.label}>Starts</Text>
         <PickerField
           value={formatDateTime(startDate)}
@@ -693,8 +742,27 @@ export default function TeacherScreen() {
             </Pressable>
           ))}
         </View>
+        </MotionView>
 
-        {message && <Text style={styles.message}>{message}</Text>}
+        {message && (
+          <MotionShake
+            trigger={
+              message.includes('required') || message.includes('after start time')
+                ? message
+                : null
+            }
+          >
+            <Text
+              style={[
+                styles.message,
+                (message.includes('required') || message.includes('after start time')) &&
+                  styles.messageError,
+              ]}
+            >
+              {message}
+            </Text>
+          </MotionShake>
+        )}
 
         <AppButton
           theme="primary"
@@ -714,10 +782,10 @@ export default function TeacherScreen() {
             />
           </View>
         )}
-      </View>
+      </MotionView>
 
       {payload && (
-        <View style={styles.resultCard}>
+        <MotionView key={payload} style={styles.resultCard} offset={0} scaleFrom={0.94} duration={280}>
           <Text style={styles.createdEventTitle}>{createdEvent?.title}</Text>
           <Text style={styles.createdEventMeta}>
             {createdEvent?.location || 'Venue not specified'}
@@ -731,10 +799,12 @@ export default function TeacherScreen() {
           <Text style={styles.resultTitle}>
             Scan this secure QR code during the event:
           </Text>
-          <View style={styles.qrBox}>
-            <QRCode value={payload} size={200} />
-          </View>
-        </View>
+          <MotionView delay={80} offset={0} scaleFrom={0.88} duration={260}>
+            <View style={styles.qrBox}>
+              <QRCode value={payload} size={200} />
+            </View>
+          </MotionView>
+        </MotionView>
       )}
     </ScrollView>
   );
@@ -836,6 +906,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 40,
+  },
+  accessContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   title: {
     fontSize: 20,
@@ -1010,10 +1086,27 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.workflowBorder,
   },
   comparisonCount: {
+    flexShrink: 1,
     color: COLORS.workflowAccent,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'right',
+  },
+  eventStatusButton: {
+    minWidth: 64,
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: COLORS.workflowBorder,
+    borderRadius: 6,
+    backgroundColor: COLORS.workflowSurface,
+  },
+  eventStatusButtonText: {
+    color: COLORS.workflowAccent,
+    fontSize: 11,
+    fontWeight: '700',
   },
   statCard: {
     flex: 1,
@@ -1234,6 +1327,9 @@ const styles = StyleSheet.create({
     color: COLORS.workflowAccent,
     textAlign: 'center',
     marginTop: 12,
+  },
+  messageError: {
+    color: COLORS.workflowDanger,
   },
   resultCard: {
     backgroundColor: COLORS.workflowSurface,
